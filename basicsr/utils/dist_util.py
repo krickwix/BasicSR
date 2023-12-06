@@ -6,8 +6,9 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
+import habana_frameworks.torch.hpu as hthpu
 
-def init_dist(launcher, backend='nccl', **kwargs):
+def init_dist(launcher, backend='hccl', **kwargs):
     if mp.get_start_method(allow_none=True) is None:
         mp.set_start_method('spawn')
     if launcher == 'pytorch':
@@ -20,8 +21,10 @@ def init_dist(launcher, backend='nccl', **kwargs):
 
 def _init_dist_pytorch(backend, **kwargs):
     rank = int(os.environ['RANK'])
-    num_gpus = torch.cuda.device_count()
-    torch.cuda.set_device(rank % num_gpus)
+    # num_gpus = torch.cuda.device_count()
+    # torch.cuda.set_device(rank % num_gpus)
+    num_gpus = hthpu.device_count()
+    hthpu.set_device(rank % num_gpus)
     dist.init_process_group(backend=backend, **kwargs)
 
 
@@ -39,8 +42,11 @@ def _init_dist_slurm(backend, port=None):
     proc_id = int(os.environ['SLURM_PROCID'])
     ntasks = int(os.environ['SLURM_NTASKS'])
     node_list = os.environ['SLURM_NODELIST']
-    num_gpus = torch.cuda.device_count()
-    torch.cuda.set_device(proc_id % num_gpus)
+    num_gpus = hthpu.device_count()
+    hthpu.set_device(proc_id % num_gpus)
+    # num_gpus = torch.cuda.device_count()
+    # torch.cuda.set_device(proc_id % num_gpus)
+    
     addr = subprocess.getoutput(f'scontrol show hostname {node_list} | head -n1')
     # specify master port
     if port is not None:

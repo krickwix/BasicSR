@@ -9,13 +9,18 @@ from basicsr.models import lr_scheduler as lr_scheduler
 from basicsr.utils import get_root_logger
 from basicsr.utils.dist_util import master_only
 
+import habana_frameworks.torch.core
+import habana_frameworks.torch.hpu as hthpu
 
 class BaseModel():
     """Base model."""
 
     def __init__(self, opt):
         self.opt = opt
-        self.device = torch.device('cuda' if opt['num_gpu'] != 0 else 'cpu')
+        if torch.cuda.is_available():
+            self.device = torch.device('cuda' if opt['num_gpu'] != 0 else 'cpu')
+        else:
+            self.device = torch.device('hpu')
         self.is_train = opt['is_train']
         self.schedulers = []
         self.optimizers = []
@@ -95,7 +100,7 @@ class BaseModel():
         if self.opt['dist']:
             find_unused_parameters = self.opt.get('find_unused_parameters', False)
             net = DistributedDataParallel(
-                net, device_ids=[torch.cuda.current_device()], find_unused_parameters=find_unused_parameters)
+                net, device_ids=[hthpu.current_device()], find_unused_parameters=find_unused_parameters)
         elif self.opt['num_gpu'] > 1:
             net = DataParallel(net)
         return net
