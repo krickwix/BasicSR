@@ -4,6 +4,18 @@ import torch
 from collections import OrderedDict
 from copy import deepcopy
 from torch.nn.parallel import DataParallel, DistributedDataParallel
+from torch.distributed.fsdp import FullyShardedDataParallel
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp.fully_sharded_data_parallel import (
+    CPUOffload,
+    BackwardPrefetch,
+)
+from torch.distributed.fsdp.wrap import (
+    size_based_auto_wrap_policy,
+    enable_wrap,
+    wrap,
+)
+import torch.distributed as dist
 
 from basicsr.models import lr_scheduler as lr_scheduler
 from basicsr.utils import get_root_logger
@@ -96,6 +108,7 @@ class BaseModel():
             find_unused_parameters = self.opt.get('find_unused_parameters', False)
             net = DistributedDataParallel(
                 net, device_ids=[torch.cuda.current_device()], find_unused_parameters=find_unused_parameters)
+            net = FSDP(net)
         elif self.opt['num_gpu'] > 1:
             net = DataParallel(net)
         return net
@@ -136,7 +149,7 @@ class BaseModel():
         """Get bare model, especially under wrapping with
         DistributedDataParallel or DataParallel.
         """
-        if isinstance(net, (DataParallel, DistributedDataParallel)):
+        if isinstance(net, (DataParallel, DistributedDataParallel,FullyShardedDataParallel)):
             net = net.module
         return net
 

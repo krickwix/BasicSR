@@ -13,6 +13,8 @@ from basicsr.utils import (AvgTimer, MessageLogger, check_resume, get_env_info, 
                            init_tb_logger, init_wandb_logger, make_exp_dirs, mkdir_and_rename, scandir)
 from basicsr.utils.options import copy_opt_file, dict2str, parse_options
 
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+import torch.distributed as dist
 
 def init_tb_loggers(opt):
     # initialize wandb logger before tensorboard logger to allow proper sync
@@ -183,6 +185,7 @@ def train_pipeline(root_path):
             # save models and training states
             if current_iter % opt['logger']['save_checkpoint_freq'] == 0:
                 logger.info('Saving models and training states.')
+                dist.barrier()
                 model.save(epoch, current_iter)
 
             # validation
