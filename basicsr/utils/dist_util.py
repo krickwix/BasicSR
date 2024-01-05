@@ -6,8 +6,10 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
+import habana_frameworks.torch.hpu as hthpu
 
 def init_dist(launcher, backend='nccl', **kwargs):
+    print(f'INIT_DIST kwargs {kwargs}')
     if mp.get_start_method(allow_none=True) is None:
         mp.set_start_method('spawn')
     if launcher == 'pytorch':
@@ -20,9 +22,16 @@ def init_dist(launcher, backend='nccl', **kwargs):
 
 def _init_dist_pytorch(backend, **kwargs):
     rank = int(os.environ['RANK'])
-    num_gpus = torch.cuda.device_count()
-    torch.cuda.set_device(rank % num_gpus)
-    dist.init_process_group(backend=backend, **kwargs)
+    if torch.cuda.is_available():
+        num_gpus = torch.cuda.device_count()
+        torch.cuda.set_device(rank % num_gpus)
+        dist.init_process_group(backend="nccl", **kwargs)
+    else:
+        num_gpus = hthpu.device_count()
+        print(f'INIT_DIST_PYTORCH rank={rank}, num_gpus={num_gpus}')
+        hthpu.set_device(f'hpu:{rank % num_gpus}')
+        print(f'INIT_DIST_PYTORCH device : {rank % num_gpus}')
+        dist.init_process_group(backend="hccl", **kwargs)
 
 
 def _init_dist_slurm(backend, port=None):

@@ -21,13 +21,23 @@ from basicsr.models import lr_scheduler as lr_scheduler
 from basicsr.utils import get_root_logger
 from basicsr.utils.dist_util import master_only
 
+import habana_frameworks.torch.core
+import habana_frameworks.torch.hpu as hthpu
+
 
 class BaseModel():
     """Base model."""
 
     def __init__(self, opt):
         self.opt = opt
-        self.device = torch.device('cuda' if opt['num_gpu'] != 0 else 'cpu')
+        rank = int(os.environ['RANK'])
+        num_gpus = hthpu.device_count()
+        if torch.cuda.is_available():
+            self.device = torch.device('cuda' if opt['num_gpu'] != 0 else 'cpu')
+        else:
+            # hpu_device = f'hpu:{rank % num_gpus}'
+            # self.device = torch.device(hpu_device)
+            self.device = torch.device("hpu")
         self.is_train = opt['is_train']
         self.schedulers = []
         self.optimizers = []
@@ -103,12 +113,17 @@ class BaseModel():
         Args:
             net (nn.Module)
         """
+        print(f'MODEL_TO_DEVICE device {self.device}')
         net = net.to(self.device)
         if self.opt['dist']:
+            rank = int(os.environ['RANK'])
+            num_gpus = hthpu.device_count()
+            print(f'MODEL_TO_DEVICE rank={rank}, num_gpus={num_gpus}')
             find_unused_parameters = self.opt.get('find_unused_parameters', False)
+            print(f'CURRENT DEVICE : {rank % num_gpus}')
             net = DistributedDataParallel(
-                net, device_ids=[torch.cuda.current_device()], find_unused_parameters=find_unused_parameters)
-            net = FSDP(net)
+                net, device_ids=[rank % num_gpus ], find_unused_parameters=find_unused_parameters)
+            #net = FSDP(net)
         elif self.opt['num_gpu'] > 1:
             net = DataParallel(net)
         return net

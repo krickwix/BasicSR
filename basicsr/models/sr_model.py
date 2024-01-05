@@ -10,6 +10,8 @@ from basicsr.utils import get_root_logger, imwrite, tensor2img
 from basicsr.utils.registry import MODEL_REGISTRY
 from .base_model import BaseModel
 
+import os
+import habana_frameworks.torch.hpu as hthpu
 
 @MODEL_REGISTRY.register()
 class SRModel(BaseModel):
@@ -85,12 +87,17 @@ class SRModel(BaseModel):
         self.optimizers.append(self.optimizer_g)
 
     def feed_data(self, data):
-        self.lq = data['lq'].to(self.device)
+        rank = int(os.environ['RANK'])
+        num_gpus = hthpu.device_count()
+
+        print(f'FEED_DATA device {self.device}')
+        self.lq = data['lq'].to(torch.device(f'hpu:{rank % num_gpus}'))
         if 'gt' in data:
-            self.gt = data['gt'].to(self.device)
+            self.gt = data['gt'].to(torch.device(f'hpu:{rank % num_gpus}'))
 
     def optimize_parameters(self, current_iter):
         self.optimizer_g.zero_grad()
+        print("OPTIMIZE_PARAMETERS")
         self.output = self.net_g(self.lq)
 
         l_total = 0
